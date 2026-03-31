@@ -1,4 +1,4 @@
-# AI Chat History Auto-Delete
+# AI Chat History Auto-Delete (AI CHAD)
 
 Privacy-focused Chrome extension that auto-deletes AI chat history older than your specified threshold.
 
