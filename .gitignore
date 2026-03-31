@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Logs & debug
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Env / secrets (if you ever add a build step that reads these)
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.idea/
+*.swp
+*.swo
+*~
+
+# Caches
+.cache/
+.eslintcache
+
+# Builds & packaging
+dist/
+release/
+*.crx
+
+# Never commit extension signing keys
+*.pem
+
+# Test / coverage 
+coverage/
+.nyc_output/
+
+# AI 
+.claude
+.cursor
+

@@ -1,0 +1,35 @@
+{
+  "name": "ai-chat-history-autodelete",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build-extension.mjs",
+    "generate-icons": "node scripts/generate-icons.js",
+    "build:css": "tailwindcss -i src/styles/input.css -o src/styles/auto-delete.css --minify",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "node scripts/integration-test.js dryrun",
+    "test:integration:delete": "node scripts/integration-test.js delete",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,cjs,mjs}": "eslint --max-warnings 0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "archiver": "^7.0.1",
+    "canvas": "^3.2.1",
+    "eslint": "^10.0.3",
+    "globals": "^17.4.0",
+    "husky": "^9.1.7",
+    "jsdom": "^29.0.1",
+    "lint-staged": "^16.4.0",
+    "tailwindcss": "3",
+    "vitest": "^4.1.0"
+  }
+}

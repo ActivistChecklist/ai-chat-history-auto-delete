@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Claude API Discovery (DELETE BEFORE RELEASE)",
+  "version": "1.0.0",
+  "description": "Logs all fetch/XHR requests on claude.ai. Load this extension, browse Claude, then run __claudeDiscoveryExport() in the console and share the output.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://claude.ai/*"],
+  "content_scripts": [
+    {
+      "matches": ["*://claude.ai/*"],
+      "js": ["discovery-content.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["*://claude.ai/*"],
+      "js": ["discovery-bridge.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>AI Chat History Auto Delete — Settings</title>
+  <link rel="stylesheet" href="../styles/auto-delete.css">
+  <link rel="stylesheet" href="../content/top-bar.css">
+</head>
+
+<body class="min-h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-800 dark:text-slate-200 pb-24">
+  <div class="max-w-xl mx-auto px-6 py-12">
+    <header class="mb-10">
+      <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100 tracking-tight">AI Chat History Auto Delete
+      </h1>
+    </header>
+
+    <main class="space-y-8">
+      <section id="pendingSection"
+        class="hidden bg-amber-50 dark:bg-amber-900/30 rounded-2xl border border-amber-200 dark:border-amber-700 p-6">
+        <p class="text-sm font-medium text-amber-900 dark:text-amber-200 mb-2"><span id="pendingCount">0</span> chat(s)
+          ready to delete now</p>
+        <p class="text-sm text-amber-800 dark:text-amber-300 mb-4">Review the list, confirm deletion, or snooze for one
+          day — same as on claude.ai.</p>
+        <button type="button" id="viewApprovePending"
+          class="px-4 py-2.5 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition disabled:opacity-50">
+          View &amp; approve
+        </button>
+      </section>
+
+      <section
+        class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-600 shadow-sm overflow-hidden">
+        <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-700">
+          <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Schedule</h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">When and how often to check for old chats</p>
+        </div>
+        <div class="px-6 py-5 space-y-5">
+          <div>
+            <label for="daysThreshold" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Delete
+              chats older than (days)</label>
+            <input type="number" id="daysThreshold" min="1" max="365" value="30"
+              class="w-24 px-4 py-2.5 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 dark:text-slate-100 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white dark:focus:bg-slate-700 outline-none transition">
+          </div>
+          <div>
+            <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Run frequency</span>
+            <div id="runFrequencyMount"></div>
+          </div>
+          <div
+            class="rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 space-y-2">
+            <p class="text-slate-800 dark:text-slate-200 font-medium">You must open claude.ai for this extension to run
+            </p>
+            <p class="leading-relaxed">Scheduled checks and other actions only run when you have claude.ai open in a
+              tab. The next time a check runs after you open claude.ai, it removes <span
+                class="font-medium text-slate-800 dark:text-slate-200">all</span> chats older than your age threshold
+              above—including any that became eligible while no claude.ai tab was open.</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="promptConfirm"
+              class="w-4 h-4 rounded border-slate-300 dark:border-slate-500 text-teal-500 focus:ring-teal-500">
+            <label for="promptConfirm" class="text-sm text-slate-700 dark:text-slate-300">Prompt me to confirm
+              deletions</label>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="ignoreStarred"
+              class="w-4 h-4 rounded border-slate-300 dark:border-slate-500 text-teal-500 focus:ring-teal-500">
+            <label for="ignoreStarred" class="text-sm text-slate-700 dark:text-slate-300">Ignore starred chats (never
+              auto-delete them)</label>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="recordActivity"
+              class="w-4 h-4 rounded border-slate-300 dark:border-slate-500 text-teal-500 focus:ring-teal-500">
+            <label for="recordActivity" class="text-sm text-slate-700 dark:text-slate-300">Save activity log (records
+              number of chat deletions for runs in the last 30 days)</label>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="showDeletedCountAfterRun"
+              class="w-4 h-4 rounded border-slate-300 dark:border-slate-500 text-teal-500 focus:ring-teal-500">
+            <label for="showDeletedCountAfterRun" class="text-sm text-slate-700 dark:text-slate-300">Show number of
+              deleted chats once after each run</label>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 -mt-2 ml-7 leading-relaxed">When off, the Claude top bar
+            only appears when you click the extension icon or when deletions need your confirmation (unless you keep
+            the bar pinned from the sidebar).</p>
+        </div>
+      </section>
+
+      <section id="sitesSection"
+        class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-600 shadow-sm overflow-hidden">
+        <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-700">
+          <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Sites</h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Enable or disable for automatic runs</p>
+        </div>
+        <div class="px-6 py-5 space-y-3" id="sitesList">
+        </div>
+      </section>
+
+      <section class="flex items-center gap-4 flex-wrap" aria-live="polite">
+        <span id="status" class="text-sm"></span>
+      </section>
+
+      <section id="activity-history"
+        class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-600 shadow-sm overflow-hidden scroll-mt-6">
+        <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Activity</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Deletions in the last 30 days</p>
+          </div>
+          <button type="button" id="clearActivity"
+            class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-600 hover:bg-slate-200 dark:hover:bg-slate-500 rounded-lg transition shrink-0">
+            Clear activity
+          </button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full" id="historyTable">
+            <thead>
+              <tr class="border-b border-slate-100 dark:border-slate-700">
+                <th
+                  class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Date</th>
+                <th
+                  class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Time</th>
+                <th
+                  class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Deleted</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody" class="divide-y divide-slate-100 dark:divide-slate-700">
+            </tbody>
+          </table>
+        </div>
+        <p id="noHistory" class="px-6 py-8 text-sm text-slate-400 dark:text-slate-500 text-center">No deletions in the
+          last 30 days.</p>
+      </section>
+
+      <section id="debugSection"
+        class="bg-amber-50 dark:bg-amber-900/30 rounded-2xl border border-amber-200 dark:border-amber-700 shadow-sm overflow-hidden hidden">
+        <div class="px-6 py-5 border-b border-amber-100 dark:border-amber-800">
+          <h2 class="text-sm font-semibold text-amber-900 dark:text-amber-200 uppercase tracking-wider">Debug: Chat
+            dates</h2>
+          <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">Last updated dates and when each chat will be
+            auto-deleted</p>
+        </div>
+        <div class="px-6 py-5 space-y-3">
+          <div
+            class="rounded-xl border border-orange-300 dark:border-orange-600 bg-orange-50 dark:bg-orange-950/50 p-4 space-y-2 -mt-1 mb-2">
+            <p class="text-xs font-semibold uppercase tracking-wide text-orange-800 dark:text-orange-200">Dev only</p>
+            <p class="text-sm text-orange-950 dark:text-orange-100 leading-relaxed">
+              <strong>Simulate scheduled scan</strong> — runs the same logic as a timer alarm: finds chats past your age
+              threshold, then either deletes automatically (if &quot;confirm before deleting&quot; is off) or sets
+              pending confirmation (badge + notification) so you can test the prompt flow. Requires claude.ai open.
+            </p>
+            <button type="button" id="devSimulateScheduledScan"
+              class="inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold rounded-lg border-2 border-orange-800 dark:border-orange-300 bg-orange-600 text-white shadow-md hover:bg-orange-700 hover:border-orange-900 dark:bg-orange-600 dark:hover:bg-orange-500 dark:hover:border-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-orange-50 dark:focus:ring-offset-orange-950 transition disabled:opacity-50 disabled:cursor-not-allowed">
+              Simulate scheduled scan
+            </button>
+            <p id="devSimulateScheduledScanStatus" class="text-xs text-orange-900 dark:text-orange-200 hidden"></p>
+          </div>
+          <p class="text-xs text-amber-700 dark:text-amber-300">Ensure you're logged in at claude.ai — this fetches your
+            chats from the API.</p>
+          <button type="button" id="debugChatDates"
+            class="px-4 py-2.5 text-sm font-medium text-amber-800 dark:text-amber-200 bg-amber-200 dark:bg-amber-700 hover:bg-amber-300 dark:hover:bg-amber-600 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+            Show chat dates
+          </button>
+
+          <div class="mt-5 pt-5 border-t border-amber-200 dark:border-amber-700 space-y-3">
+            <h3 class="text-sm font-semibold text-amber-900 dark:text-amber-200 uppercase tracking-wider">Integration
+              test</h3>
+            <p class="text-xs text-amber-700 dark:text-amber-300">Find the oldest chat and delete it, regardless of age
+              threshold. Use this to verify the full pipeline works end-to-end.</p>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button type="button" id="integrationDryRun"
+                class="px-4 py-2.5 text-sm font-medium text-amber-800 dark:text-amber-200 bg-amber-200 dark:bg-amber-700 hover:bg-amber-300 dark:hover:bg-amber-600 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+                Dry run (find only)
+              </button>
+              <button type="button" id="integrationRun"
+                class="px-4 py-2.5 text-sm font-medium text-white bg-teal-500 hover:bg-teal-600 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+                Find &amp; delete one chat
+              </button>
+            </div>
+            <div id="integrationResult"
+              class="hidden rounded-lg border border-amber-200 dark:border-amber-700 bg-white dark:bg-slate-800 p-4 text-sm text-slate-600 dark:text-slate-400 space-y-1">
+            </div>
+          </div>
+          <div id="debugOutput" class="hidden mt-4 space-y-3">
+            <div
+              class="max-h-80 overflow-auto rounded-lg border border-amber-200 dark:border-amber-700 bg-white dark:bg-slate-800">
+              <table class="w-full" id="debugTable">
+                <thead>
+                  <tr class="border-b border-amber-100 dark:border-amber-800">
+                    <th
+                      class="px-4 py-2 text-left text-xs font-medium text-amber-800 dark:text-amber-200 uppercase tracking-wider">
+                      Chat</th>
+                    <th
+                      class="px-4 py-2 text-left text-xs font-medium text-amber-800 dark:text-amber-200 uppercase tracking-wider">
+                      Last updated</th>
+                    <th
+                      class="px-4 py-2 text-left text-xs font-medium text-amber-800 dark:text-amber-200 uppercase tracking-wider">
+                      Auto-delete in</th>
+                  </tr>
+                </thead>
+                <tbody id="debugBody" class="divide-y divide-amber-100 dark:divide-amber-800">
+                </tbody>
+              </table>
+              <p id="debugNoChats" class="hidden px-4 py-6 text-sm text-amber-700 dark:text-amber-300 text-center">No
+                chats found.</p>
+            </div>
+            <details id="debugLogDetails"
+              class="rounded-lg border border-amber-200 dark:border-amber-700 bg-white dark:bg-slate-800">
+              <summary
+                class="px-4 py-2 text-sm font-medium text-amber-800 dark:text-amber-200 cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-900/30">
+                Pagination debug log (click to expand)</summary>
+              <pre id="debugLogPre"
+                class="p-4 text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap font-mono overflow-x-auto max-h-48"></pre>
+            </details>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer id="saveStatusBar" role="status"
+    class="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 dark:border-slate-600 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-[0_-4px_24px_rgba(15,23,42,0.06)] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.35)]">
+    <div class="max-w-xl mx-auto px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-start gap-2 min-w-0 flex-1">
+        <span id="autosaveIcon" class="shrink-0 mt-0.5 text-lg leading-none hidden" aria-hidden="true">✓</span>
+        <p id="autosaveMessage" class="text-sm text-slate-600 dark:text-slate-300 leading-snug">Changes save automatically
+          a few seconds after you edit.</p>
+      </div>
+      <button type="button" id="saveNow"
+        class="shrink-0 px-4 py-2 text-sm font-medium text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800 rounded-lg hover:bg-teal-100 dark:hover:bg-teal-900/40 transition disabled:opacity-50 disabled:cursor-not-allowed">
+        Save now
+      </button>
+    </div>
+  </footer>
+  <script type="module" src="options.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Welcome — AI Chat History Auto-Delete</title>
+  <link rel="stylesheet" href="../styles/auto-delete.css">
+</head>
+
+<body class="min-h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-800 dark:text-slate-200 antialiased">
+  <div class="min-h-screen flex flex-col items-center px-4 py-10 sm:py-14">
+    <div class="w-full max-w-md">
+      <header class="text-center mb-8">
+        <p class="text-xs font-medium text-teal-600 uppercase tracking-wider mb-2">AI Chat History Auto-Delete</p>
+        <h1 id="pageTitle" class="text-2xl font-semibold text-slate-900 dark:text-slate-100 tracking-tight">Welcome</h1>
+        <p id="pageSubtitle" class="text-slate-500 dark:text-slate-400 mt-2 text-sm leading-relaxed">
+          Privacy: All your data stays on your device.
+        </p>
+      </header>
+
+      <div id="step1Panel">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-600 shadow-sm overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
+          <section class="px-6 py-5">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Step 1 of 2</p>
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Age threshold</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Chats older than this age will be deleted when the extension runs.
+            </p>
+            <div class="mt-4 flex items-end gap-3">
+              <div>
+                <label for="onboardDays" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Days</label>
+                <input type="number" id="onboardDays" min="1" max="365" value="30"
+                  class="w-24 px-3 py-2.5 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 dark:text-slate-100 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white dark:focus:bg-slate-700 outline-none transition">
+              </div>
+            </div>
+            <p id="onboardError" class="hidden mt-2 text-sm text-rose-600">Enter a number from 1 to 365.</p>
+          </section>
+
+          <section class="px-6 py-5">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Scheduled checks</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Optional. If on, the extension periodically looks for chats past your
+              threshold.</p>
+            <div id="runFrequencyMount" class="mt-4"></div>
+          </section>
+
+          <section class="px-6 py-4 bg-slate-50/80 dark:bg-slate-700/50">
+            <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              <span class="font-medium text-slate-800 dark:text-slate-200">You must open claude.ai for this extension to work.</span>
+              The next time a check runs after you’ve opened claude.ai—on your schedule or when you use Run now—it removes
+              all conversations older than the age you set here, including any that crossed that line while no claude.ai
+              tab was open.
+            </p>
+          </section>
+        </div>
+
+        <div class="mt-6 space-y-3">
+          <button type="button" id="onboardingContinue"
+            class="w-full px-4 py-3 text-sm font-medium text-white bg-teal-500 hover:bg-teal-600 rounded-xl transition shadow-sm">
+            Continue
+          </button>
+          <button type="button" id="onboardingLater"
+            class="w-full px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 rounded-xl transition">
+            Decide later — keep manual-only &amp; defaults
+          </button>
+        </div>
+      </div>
+
+      <div id="step2Panel" class="hidden w-full">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-600 shadow-sm px-6 pt-6 pb-6 flex flex-col">
+          <div class="flex items-start justify-between gap-3">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Step 2 of 2</p>
+            <button type="button" id="step2Back"
+              class="shrink-0 -mt-0.5 -mr-1 px-2 py-1 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed">
+              ← Back
+            </button>
+          </div>
+          <div>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mt-2">Try a cleanup</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed text-left">We’ll load chats from Claude that are older than your threshold. Keep a <span class="whitespace-nowrap">claude.ai</span> tab open and signed in. You can delete matches here or skip.</p>
+          </div>
+
+          <div class="mt-5 flex flex-col gap-4 text-left">
+            <div id="step2Loading" class="rounded-xl border border-slate-100 dark:border-slate-600 bg-slate-50/80 dark:bg-slate-700/50 px-4 py-10">
+              <p class="text-sm text-slate-600 dark:text-slate-400 text-center">Loading chats from Claude…</p>
+            </div>
+
+            <div id="step2Problem" class="hidden space-y-4">
+              <div class="rounded-xl border border-teal-100 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-900/30 px-4 py-3">
+                <p id="step2ProblemTitle" class="text-sm font-semibold text-slate-900 dark:text-slate-100"></p>
+                <p id="step2ProblemBody" class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mt-2"></p>
+              </div>
+              <div class="flex flex-col gap-2">
+                <button type="button" id="step2OpenClaude"
+                  class="hidden w-full px-4 py-3 text-sm font-medium text-white bg-teal-500 hover:bg-teal-600 rounded-xl transition">
+                  Open claude.ai
+                </button>
+                <button type="button" id="step2Retry"
+                  class="w-full px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-600 hover:bg-slate-200 dark:hover:bg-slate-500 rounded-xl transition">
+                  Try again
+                </button>
+              </div>
+            </div>
+
+            <div id="step2Empty" class="hidden">
+              <div class="flex flex-col gap-4">
+                <div class="rounded-xl border border-slate-100 dark:border-slate-600 bg-slate-50/80 dark:bg-slate-700/50 px-4 py-4">
+                  <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">No chats are old enough to delete with your current threshold.</p>
+                </div>
+                <button type="button" id="step2FinishEmpty"
+                  class="w-full px-4 py-3 text-sm font-medium text-white bg-teal-500 hover:bg-teal-600 rounded-xl transition shadow-sm">
+                  Finish setup
+                </button>
+              </div>
+            </div>
+
+            <div id="step2Preview" class="hidden">
+              <div class="flex flex-col gap-4">
+                <p id="step2Summary" class="text-sm font-medium text-slate-800 dark:text-slate-200"></p>
+                <div class="rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 max-h-64 overflow-y-auto px-4 py-3">
+                  <ul id="step2List" class="text-sm text-slate-700 dark:text-slate-300 space-y-2 list-disc pl-4 marker:text-slate-400 dark:marker:text-slate-500"></ul>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">These chats will be permanently removed from Claude. Starred chats are skipped if you left that option on in settings.</p>
+                <div class="flex flex-col gap-2">
+                  <button type="button" id="step2ConfirmDelete"
+                    class="w-full px-4 py-3 text-sm font-medium text-white bg-teal-500 hover:bg-teal-600 rounded-xl transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                    Delete these chats
+                  </button>
+                  <button type="button" id="step2SkipDelete"
+                    class="w-full px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 rounded-xl transition disabled:opacity-50">
+                    Skip — finish without deleting
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div id="step2Deleting" class="hidden space-y-3">
+              <p class="text-sm text-slate-600 dark:text-slate-400 text-center">Deleting chats…</p>
+              <div id="step2ProgressWrap" class="hidden">
+                <div class="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                  <span>Progress</span>
+                  <span id="step2ProgressCount">0 / 0</span>
+                </div>
+                <div class="h-2 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                  <div id="step2ProgressBar" class="h-full bg-teal-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="successPanel" class="hidden text-center">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-600 shadow-sm px-6 py-10">
+          <div
+            class="w-12 h-12 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          </div>
+          <h2 class="text-lg font-semibold text-slate-900">You’re set</h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+            Open the extension anytime from the toolbar, or visit full settings for more options.
+          </p>
+          <button type="button" id="closeTab"
+            class="mt-6 w-full px-4 py-3 text-sm font-medium text-white bg-teal-500 hover:bg-teal-600 rounded-xl transition shadow-sm">
+            Close this tab
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="onboarding.js"></script>
+</body>
+
+</html>
