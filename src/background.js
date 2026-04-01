@@ -531,34 +531,69 @@ chrome.storage.local.get(STORAGE_KEYS.PENDING_CONFIRM).then(({ pending_confirm }
   setBadge(badgeCountForPending(pending_confirm));
 });
 
-const TOOLBAR_TOP_BAR_POLL_MS = 200;
-const TOOLBAR_TOP_BAR_MAX_WAIT_MS = 35000;
-
 /**
- * Ask the Claude tab to show/pin the top bar. Retries until the content script is
- * injected and can receive messages (new tabs are slow; a fixed sleep is unreliable).
+ * Ask the Claude tab to show/pin the top bar.
+ *
+ * Strategy (avoids a rapid-fire retry loop that spams the console):
+ *  1. Try once immediately — succeeds when the content script is already live.
+ *  2. If that fails, wait for the tab's `status === 'complete'` event (covers hard
+ *     refresh / in-flight navigation) then retry a handful of times with a short
+ *     back-off to let the content script finish initialising.
+ *  3. Time-box the whole thing so we never hang indefinitely.
  *
  * We do not use executeScript(top-bar.js) as a fallback: that file is an ES module
  * (import …) and programmatic file injection runs as a classic script, so it fails to parse.
  */
 async function showTopBarOnClaudeTab(tabId) {
   if (tabId == null) return false;
-  const deadline = Date.now() + TOOLBAR_TOP_BAR_MAX_WAIT_MS;
-  let lastErr;
-  while (Date.now() < deadline) {
-    try {
-      log('sendMessage REFRESH_STATE to tab', tabId);
-      await chrome.tabs.sendMessage(tabId, { type: 'REFRESH_STATE' });
-      log('sendMessage ok');
-      return true;
-    } catch (e) {
-      lastErr = e;
-      log('sendMessage wait/retry', e?.message);
-      await new Promise((r) => setTimeout(r, TOOLBAR_TOP_BAR_POLL_MS));
-    }
+
+  async function trySend() {
+    log('sendMessage REFRESH_STATE to tab', tabId);
+    await chrome.tabs.sendMessage(tabId, { type: 'REFRESH_STATE' });
+    log('sendMessage ok');
+    return true;
   }
-  log('showTopBarOnClaudeTab: timed out', lastErr?.message);
-  return false;
+
+  // 1. Try immediately — works when the CS is already live.
+  try {
+    return await trySend();
+  } catch {
+    log('sendMessage: content script not ready, waiting for tab to finish loading');
+  }
+
+  // 2. Wait for the tab to reach status=complete (e.g. after hard refresh),
+  //    then retry a few times with a short delay to let the CS initialise.
+  const POST_LOAD_RETRIES = 5;
+  const POST_LOAD_DELAY_MS = 400;
+  const LOAD_WAIT_TIMEOUT_MS = 15000;
+
+  return new Promise((resolve) => {
+    const giveUp = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      log('showTopBarOnClaudeTab: timed out waiting for tab');
+      resolve(false);
+    }, LOAD_WAIT_TIMEOUT_MS);
+
+    async function onUpdated(updatedId, info) {
+      if (updatedId !== tabId || info.status !== 'complete') return;
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      clearTimeout(giveUp);
+
+      for (let i = 0; i < POST_LOAD_RETRIES; i++) {
+        await new Promise((r) => setTimeout(r, POST_LOAD_DELAY_MS));
+        try {
+          resolve(await trySend());
+          return;
+        } catch (e) {
+          log('sendMessage retry', i + 1, e?.message);
+        }
+      }
+      log('showTopBarOnClaudeTab: content script did not respond after tab load');
+      resolve(false);
+    }
+
+    chrome.tabs.onUpdated.addListener(onUpdated);
+  });
 }
 
 chrome.action.onClicked.addListener(async () => {
