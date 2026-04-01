@@ -3,14 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "node scripts/build-extension.mjs",
     "generate-icons": "node scripts/generate-icons.js",
+    "build": "node scripts/build-extension.mjs",
     "build:css": "tailwindcss -i src/styles/input.css -o src/styles/auto-delete.css --minify",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "node scripts/integration-test.js dryrun",
     "test:integration:delete": "node scripts/integration-test.js delete",
     "lint": "eslint .",
+    "release": "node scripts/publish.mjs",
     "lint:fix": "eslint . --fix",
     "prepare": "husky"
   },
