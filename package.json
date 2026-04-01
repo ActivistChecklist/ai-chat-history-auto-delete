@@ -1,6 +1,7 @@
 {
   "name": "ai-chat-history-auto-delete",
   "version": "1.0.0",
+  "description": "Chrome extension that automatically deletes old Claude chats. You pick how far back (default: 30 days). Runs in your browser — nothing leaves your device.",
   "private": true,
   "scripts": {
     "generate-icons": "node scripts/generate-icons.js",
@@ -32,5 +33,6 @@
     "lint-staged": "^16.4.0",
     "tailwindcss": "3",
     "vitest": "^4.1.0"
-  }
+  },
+  "dependencies": {}
 }

@@ -14,6 +14,7 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -53,8 +54,129 @@ function parseArgs(argv) {
   const set = new Set(argv);
   return {
     noZip: set.has('--no-zip'),
-    skipCss: set.has('--skip-css')
+    skipCss: set.has('--skip-css'),
+    sign: set.has('--sign')
   };
+}
+
+// ─── CRX signing via 1Password CLI ───────────────────────────────────────────
+
+/**
+ * Returns the path to the Chrome (or Chromium) executable, or null if not found.
+ * Needed because macOS Chrome lives in a long path, not on $PATH.
+ */
+function findChrome() {
+  const candidates = [
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    'google-chrome',
+    'google-chrome-stable',
+    'chromium',
+    'chromium-browser'
+  ];
+  for (const c of candidates) {
+    if (c.startsWith('/')) {
+      if (fs.existsSync(c)) return c;
+    } else {
+      const r = spawnSync('which', [c], { encoding: 'utf8' });
+      if (r.status === 0 && r.stdout.trim()) return r.stdout.trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * Reads the private key PEM from 1Password using the `op` CLI.
+ * Requires OP_SIGNING_KEY_REF to be set, e.g.:
+ *   export OP_SIGNING_KEY_REF="op://Personal/Chrome Extension Signing Key/private key"
+ */
+function readKeyFrom1Password() {
+  const ref = process.env.OP_SIGNING_KEY_REF;
+  if (!ref) {
+    throw new Error(
+      'Set OP_SIGNING_KEY_REF to your 1Password item reference.\n' +
+      '  e.g. export OP_SIGNING_KEY_REF="op://Personal/Chrome Extension Signing Key/private key"'
+    );
+  }
+  const r = spawnSync('op', ['read', ref], { encoding: 'utf8' });
+  if (r.error) {
+    throw new Error(`1Password CLI (op) not found: ${r.error.message}`);
+  }
+  if (r.status !== 0) {
+    throw new Error(`op read failed (status ${r.status}):\n${r.stderr?.trim()}`);
+  }
+  return r.stdout;
+}
+
+/**
+ * Signs dist/ into a .crx using Chrome's --pack-extension.
+ * Key is pulled from 1Password, written to a temp file, used, then wiped.
+ * Returns the path to the produced .crx in release/.
+ */
+async function signExtension(version) {
+  const chrome = findChrome();
+  if (!chrome) {
+    throw new Error(
+      'Chrome/Chromium executable not found.\n' +
+      'Install Chrome or ensure it is on your PATH.'
+    );
+  }
+
+  console.log('Retrieving signing key from 1Password…');
+  const keyPem = readKeyFrom1Password();
+
+  // Write to a temp file — mode 0o600 so only the current user can read it
+  const tmpKey = path.join(os.tmpdir(), `crx-signing-key-${process.pid}.pem`);
+  try {
+    fs.writeFileSync(tmpKey, keyPem, { mode: 0o600 });
+
+    console.log('Signing extension with Chrome…');
+    // Chrome requires flag=value syntax (not space-separated) for --pack-extension on macOS.
+    // Writes <parent-of-dist>/dist.crx — i.e. <ROOT>/dist.crx
+    const r = spawnSync(chrome, [
+      `--pack-extension=${DIST}`,
+      `--pack-extension-key=${tmpKey}`
+    ], { cwd: ROOT, stdio: 'inherit' });
+    if (r.error) throw r.error;
+    if (r.status !== 0) throw new Error(`Chrome signing exited with status ${r.status}`);
+
+    const crxSrc = path.join(ROOT, 'dist.crx');
+    if (!fs.existsSync(crxSrc)) {
+      throw new Error('dist.crx not found after Chrome pack — did the signing succeed?');
+    }
+
+    // Verify CRX3 magic bytes ("Cr24" = 0x43 0x72 0x32 0x34)
+    const magic = Buffer.alloc(4);
+    const fd = fs.openSync(crxSrc, 'r');
+    fs.readSync(fd, magic, 0, 4, 0);
+    fs.closeSync(fd);
+    if (magic.toString('ascii') !== 'Cr24') {
+      throw new Error(
+        `CRX magic bytes invalid — got ${JSON.stringify(magic.toString('ascii'))} ` +
+        `(expected "Cr24"). The file is likely a bare zip; signing may have failed.`
+      );
+    }
+    console.log('CRX magic bytes verified (Cr24 ✓)');
+
+    const safeVersion = String(version).replace(/[^0-9a-z._-]+/gi, '-');
+    const crxName = `ai-chat-history-auto-delete-${safeVersion}.crx`;
+    const crxDest = path.join(RELEASE, crxName);
+    fs.mkdirSync(RELEASE, { recursive: true });
+    if (fs.existsSync(crxDest)) fs.unlinkSync(crxDest);
+    fs.renameSync(crxSrc, crxDest);
+
+    console.log(`CRX:  ${crxDest}`);
+    return crxDest;
+  } finally {
+    // Always wipe the temp key — overwrite with zeros first, then delete
+    if (fs.existsSync(tmpKey)) {
+      try {
+        const len = fs.statSync(tmpKey).size;
+        fs.writeFileSync(tmpKey, Buffer.alloc(len, 0));
+      } catch { /* best-effort */ }
+      fs.unlinkSync(tmpKey);
+    }
+  }
 }
 
 function assertSafeSourcePath(absPath, label) {
@@ -152,7 +274,7 @@ function zipDist(version) {
 }
 
 async function main() {
-  const { noZip, skipCss } = parseArgs(process.argv.slice(2));
+  const { noZip, skipCss, sign } = parseArgs(process.argv.slice(2));
 
   fs.rmSync(DIST, { recursive: true, force: true });
   fs.mkdirSync(DIST, { recursive: true });
@@ -175,6 +297,10 @@ async function main() {
 
   if (!noZip) {
     await zipDist(manifest.version);
+  }
+
+  if (sign) {
+    await signExtension(manifest.version);
   }
 }
 
