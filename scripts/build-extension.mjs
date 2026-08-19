@@ -20,9 +20,15 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import archiver from 'archiver';
+import { assertChromeVersion } from './lib/chrome-version.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
+
+// Load .env so OP_SIGNING_KEY_REF works for `yarn build --sign` without shell setup.
+// Real environment variables take precedence.
+const ENV_FILE = path.join(ROOT, '.env');
+if (fs.existsSync(ENV_FILE)) process.loadEnvFile(ENV_FILE);
 const DIST = path.join(ROOT, 'dist');
 const RELEASE = path.join(ROOT, 'release');
 
@@ -246,6 +252,8 @@ function validateManifest(manifestPath) {
   if (!m.name || !m.version) {
     throw new Error('manifest.json must include name and version');
   }
+  // Catch an illegal version here rather than at Web Store upload time.
+  assertChromeVersion(m.version);
   const csp = m.content_security_policy?.extension_pages;
   if (typeof csp === 'string' && csp.includes('unsafe-eval')) {
     throw new Error('Refusing to ship extension_pages CSP containing unsafe-eval');
