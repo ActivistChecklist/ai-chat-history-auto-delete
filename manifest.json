@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI Chat History Auto-Delete",
   "version": "1.0.0",
-  "description": "Automatically delete old Claude chats. You pick how far back (default: 30 days). Runs in your browser — nothing leaves your device.",
+  "description": "Automatically delete old Claude chats. You pick how far back (default: 30 days). Runs in your browser \u2014 nothing leaves your device.",
   "permissions": [
     "storage",
     "alarms",
@@ -35,10 +35,11 @@
         "https://claude.ai/*"
       ],
       "js": [
-        "src/content/top-bar.js"
+        "src/content/sidebar-badge.js"
       ],
       "css": [
-        "src/content/top-bar.css"
+        "src/shared/modal.css",
+        "src/content/sidebar-badge.css"
       ],
       "run_at": "document_end"
     }
@@ -49,7 +50,7 @@
       "resources": [
         "src/shared/pending-deletion-modal.js",
         "src/shared/constants.js",
-        "src/shared/bar-insertion.js"
+        "src/shared/badge-insertion.js"
       ],
       "matches": [
         "https://claude.ai/*"

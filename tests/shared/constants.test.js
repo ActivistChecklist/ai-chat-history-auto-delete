@@ -68,7 +68,7 @@ describe('constants', () => {
   it('STORAGE_KEYS has all required keys', () => {
     const required = [
       'SETTINGS', 'OPTIONS_PENDING_HASH', 'ACTIVITY_HISTORY', 'LAST_RUN', 'PENDING_CONFIRM',
-      'DELETION_PROGRESS', 'CACHED_ORG_ID', 'ONBOARDING_COMPLETE', 'TOP_BAR_DISMISSED_RUN'
+      'DELETION_PROGRESS', 'CACHED_ORG_ID', 'ONBOARDING_COMPLETE'
     ];
     required.forEach((key) => {
       expect(STORAGE_KEYS).toHaveProperty(key);

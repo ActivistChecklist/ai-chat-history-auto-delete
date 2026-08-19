@@ -57,8 +57,8 @@ export async function applySnoozeToPending(storageKey = STORAGE_KEYS.PENDING_CON
 }
 
 /**
- * Deletion approval modal (shared by Claude top bar and extension options).
- * Uses classes from top-bar.css (.aichad-modal-overlay, .aichad-modal--chats, …).
+ * Deletion approval modal (shared by the Claude sidebar badge and extension options).
+ * Uses classes from shared/modal.css (.aichad-modal-overlay, .aichad-modal--chats, …).
  *
  * @param {object} pend - pending_confirm snapshot
  * @param {object} [opts]

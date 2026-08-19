@@ -1,6 +1,6 @@
 /**
  * Resolves the day threshold for a single deletion run (matches background RUN_NOW options).
- * When `options.daysOverride` is set (e.g. from the top-bar modal), it wins over saved settings.
+ * When `options.daysOverride` is set (e.g. from the Run now modal), it wins over saved settings.
  */
 export function resolveRunDaysThreshold(settings, options = {}) {
   const saved = settings?.daysThreshold ?? 30;

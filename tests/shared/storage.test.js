@@ -9,6 +9,7 @@ import {
   addActivityEntry,
   getLastRun,
   setLastRun,
+  getLastDeletion,
   getPendingConfirm,
   setPendingConfirm,
   clearPendingConfirm,
@@ -131,6 +132,48 @@ describe('getLastRun / setLastRun', () => {
     await setLastRun(data);
     const result = await getLastRun();
     expect(result).toEqual(data);
+  });
+});
+
+describe('getLastDeletion', () => {
+  it('returns null when nothing has ever been deleted', async () => {
+    expect(await getLastDeletion()).toBeNull();
+  });
+
+  it('is recorded by setLastRun when a run deleted something', async () => {
+    const timestamp = Date.now();
+    await setLastRun({ deleted: 4, timestamp });
+    expect(await getLastDeletion()).toEqual({ deleted: 4, timestamp });
+  });
+
+  it('is NOT overwritten by a later run that deleted nothing', async () => {
+    const deletedAt = Date.now() - 3 * 24 * 60 * 60 * 1000;
+    await setLastRun({ deleted: 4, timestamp: deletedAt });
+    await setLastRun({ deleted: 0, timestamp: Date.now() });
+
+    // LAST_RUN moves on; the deletion record stays put — this is what the badge reports.
+    expect((await getLastRun()).deleted).toBe(0);
+    expect(await getLastDeletion()).toEqual({ deleted: 4, timestamp: deletedAt });
+  });
+
+  it('ignores a run with no timestamp', async () => {
+    await setLastRun({ deleted: 9 });
+    expect(await getLastDeletion()).toBeNull();
+  });
+
+  it('falls back to activity history for installs predating the key', async () => {
+    await addActivityEntry(0);
+    await addActivityEntry(7);
+    const result = await getLastDeletion();
+    expect(result.deleted).toBe(7);
+    expect(typeof result.timestamp).toBe('number');
+  });
+
+  it('prefers the stored record over activity history', async () => {
+    const timestamp = Date.now() - 60_000;
+    await setLastRun({ deleted: 2, timestamp });
+    await addActivityEntry(99);
+    expect(await getLastDeletion()).toEqual({ deleted: 2, timestamp });
   });
 });
 

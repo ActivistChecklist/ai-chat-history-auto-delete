@@ -550,7 +550,7 @@ chrome.storage.local.get(STORAGE_KEYS.PENDING_CONFIRM).then(({ pending_confirm }
 });
 
 /**
- * Ask the Claude tab to show/pin the top bar.
+ * Ask the Claude tab to refresh the sidebar badge and flash it for attention.
  *
  * Strategy (avoids a rapid-fire retry loop that spams the console):
  *  1. Try once immediately — succeeds when the content script is already live.
@@ -559,10 +559,10 @@ chrome.storage.local.get(STORAGE_KEYS.PENDING_CONFIRM).then(({ pending_confirm }
  *     back-off to let the content script finish initialising.
  *  3. Time-box the whole thing so we never hang indefinitely.
  *
- * We do not use executeScript(top-bar.js) as a fallback: that file is an ES module
- * (import …) and programmatic file injection runs as a classic script, so it fails to parse.
+ * We do not use executeScript(sidebar-badge.js) as a fallback: that file dynamically
+ * imports ES modules, and programmatic file injection runs as a classic script.
  */
-async function showTopBarOnClaudeTab(tabId) {
+async function pingBadgeOnClaudeTab(tabId) {
   if (tabId == null) return false;
 
   async function trySend() {
@@ -588,7 +588,7 @@ async function showTopBarOnClaudeTab(tabId) {
   return new Promise((resolve) => {
     const giveUp = setTimeout(() => {
       chrome.tabs.onUpdated.removeListener(onUpdated);
-      log('showTopBarOnClaudeTab: timed out waiting for tab');
+      log('pingBadgeOnClaudeTab: timed out waiting for tab');
       resolve(false);
     }, LOAD_WAIT_TIMEOUT_MS);
 
@@ -606,7 +606,7 @@ async function showTopBarOnClaudeTab(tabId) {
           log('sendMessage retry', i + 1, e?.message);
         }
       }
-      log('showTopBarOnClaudeTab: content script did not respond after tab load');
+      log('pingBadgeOnClaudeTab: content script did not respond after tab load');
       resolve(false);
     }
 
@@ -624,5 +624,5 @@ chrome.action.onClicked.addListener(async () => {
     tabId = tabs[0].id;
     await chrome.tabs.update(tabId, { active: true });
   }
-  await showTopBarOnClaudeTab(tabId);
+  await pingBadgeOnClaudeTab(tabId);
 });

@@ -33,11 +33,12 @@ export const STORAGE_KEYS = {
   OPTIONS_PENDING_HASH: 'options_pending_hash',
   ACTIVITY_HISTORY: 'activity_history',
   LAST_RUN: 'last_run',
+  /** Last run that actually removed >=1 chat (LAST_RUN also covers no-op runs) */
+  LAST_DELETION: 'last_deletion',
   PENDING_CONFIRM: 'pending_confirm',
   DELETION_PROGRESS: 'deletion_progress',
   CACHED_ORG_ID: 'cached_org_id',
-  ONBOARDING_COMPLETE: 'onboarding_complete',
-  TOP_BAR_DISMISSED_RUN: 'top_bar_dismissed_run'
+  ONBOARDING_COMPLETE: 'onboarding_complete'
 };
 
 export const ALARM_NAME = 'auto-delete-check';

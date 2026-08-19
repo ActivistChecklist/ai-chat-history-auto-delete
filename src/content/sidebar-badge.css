@@ -1,0 +1,335 @@
+/**
+ * Sidebar badge — the extension's entire in-page surface on claude.ai.
+ *
+ * It sits under the "Chats and tasks" label but deliberately does NOT impersonate a
+ * chat row: no leading status dot, and a faint fill so it reads as a control that
+ * belongs to the extension rather than another conversation.
+ *
+ * Theming: the row inherits `color` from Claude's sidebar and derives its own fill
+ * from `currentColor`, so it stays correct in light mode, dark mode, and any future
+ * palette. Layout metrics reuse Claude's `--df-*` row tokens with fallbacks.
+ */
+
+#aichad-sidebar-badge {
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  margin-block: 2px;
+  height: var(--df-row-h, 32px);
+  padding-inline: 4px;
+  border-radius: var(--df-radius-pill, 0.5rem);
+  font-size: var(--df-row-font, 0.8125rem);
+  line-height: 1.2;
+  color: inherit;
+  /* Distinct from chat rows (which are transparent), but only just. */
+  background: rgba(128, 128, 128, 0.09);
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  transition: background-color 0.15s ease-out;
+}
+
+#aichad-sidebar-badge:hover,
+#aichad-sidebar-badge[data-open='true'] {
+  background: rgba(128, 128, 128, 0.14);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+/* Reset — Claude's sidebar has aggressive button styling. */
+.aichad-badge__main {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: calc(var(--df-radius-pill, 0.5rem) - 2px);
+  transition: opacity 0.15s ease-out, background-color 0.15s ease-out;
+}
+
+.aichad-badge__main:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--cds-fill-accent, currentColor);
+}
+
+.aichad-badge__main {
+  display: flex;
+  align-items: center;
+  gap: var(--df-row-gap, 0.5rem);
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding-inline: 4px;
+  text-align: left;
+  opacity: 0.62;
+}
+
+#aichad-sidebar-badge:hover .aichad-badge__main,
+#aichad-sidebar-badge[data-open='true'] .aichad-badge__main {
+  opacity: 1;
+}
+
+/**
+ * Pending approval — the one state that should read as "act on me".
+ * Alpha-blended red so it tints whatever the sidebar background happens to be.
+ */
+#aichad-sidebar-badge[data-state='pending'] {
+  background: rgba(220, 38, 38, 0.1);
+  background: color-mix(in srgb, #dc2626 11%, transparent);
+}
+
+#aichad-sidebar-badge[data-state='pending']:hover,
+#aichad-sidebar-badge[data-state='pending'][data-open='true'] {
+  background: rgba(220, 38, 38, 0.17);
+  background: color-mix(in srgb, #dc2626 18%, transparent);
+}
+
+/* A dark red at 11% vanishes on a dark sidebar — go lighter and stronger. */
+[data-mode='dark'] #aichad-sidebar-badge[data-state='pending'] {
+  background: rgba(248, 113, 113, 0.15);
+  background: color-mix(in srgb, #f87171 15%, transparent);
+}
+
+[data-mode='dark'] #aichad-sidebar-badge[data-state='pending']:hover,
+[data-mode='dark'] #aichad-sidebar-badge[data-state='pending'][data-open='true'] {
+  background: rgba(248, 113, 113, 0.24);
+  background: color-mix(in srgb, #f87171 24%, transparent);
+}
+
+/* States needing attention sit at full strength even at rest. */
+#aichad-sidebar-badge[data-state='pending'] .aichad-badge__main,
+#aichad-sidebar-badge[data-state='progress'] .aichad-badge__main,
+#aichad-sidebar-badge[data-state='error'] .aichad-badge__main {
+  opacity: 0.95;
+}
+
+.aichad-badge__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.aichad-badge__count {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+/* With the status dot gone, the count carries the state colour. */
+#aichad-sidebar-badge[data-state='pending'] .aichad-badge__count,
+#aichad-sidebar-badge[data-state='progress'] .aichad-badge__count {
+  opacity: 1;
+  font-weight: 600;
+}
+
+#aichad-sidebar-badge[data-state='progress'] .aichad-badge__count {
+  color: var(--cds-clay, #d97757);
+}
+
+/* Clay on a red wash reads as mud; match the count to the row instead. */
+#aichad-sidebar-badge[data-state='pending'] .aichad-badge__count {
+  color: #b91c1c;
+}
+
+[data-mode='dark'] #aichad-sidebar-badge[data-state='pending'] .aichad-badge__count {
+  color: #fca5a5;
+}
+
+#aichad-sidebar-badge[data-state='error'] .aichad-badge__label {
+  color: #dc2626;
+}
+
+/* Thin progress track pinned to the bottom of the row during a run. */
+.aichad-badge__track {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 1px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.15;
+  display: none;
+}
+
+#aichad-sidebar-badge[data-state='progress'] .aichad-badge__track {
+  display: block;
+}
+
+.aichad-badge__track-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--cds-clay, #d97757);
+  transition: width 0.25s ease-out;
+}
+
+/* Toolbar-icon click while the badge is already mounted — brief, quiet emphasis. */
+@keyframes aichad-badge-attention {
+  0%, 100% { opacity: 1; }
+  40% { opacity: 0.3; }
+  70% { opacity: 1; }
+}
+
+#aichad-sidebar-badge.aichad-badge--attention {
+  animation: aichad-badge-attention 0.75s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #aichad-sidebar-badge.aichad-badge--attention {
+    animation: none;
+  }
+
+  .aichad-badge__track-fill {
+    transition: none;
+  }
+}
+
+/**
+ * Click-activated panel.
+ *
+ * Rendered into document.body with position: fixed, NOT inside the sidebar —
+ * Claude's `.dframe-sidebar-body` sets `overflow: clip` and `.dframe-nav-scroll`
+ * scrolls, either of which would clip or scroll away a nested popover.
+ * Because it lives outside `.cds-root`, it carries its own palette.
+ */
+#aichad-badge-panel {
+  position: fixed;
+  z-index: 2147483645;
+  width: 17rem;
+  max-width: calc(100vw - 1.5rem);
+  padding: 0.75rem 0.875rem;
+  border-radius: 0.75rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+  color: #1e293b;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.12s ease-out, transform 0.12s ease-out;
+  pointer-events: none;
+}
+
+#aichad-badge-panel[data-visible='true'] {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #aichad-badge-panel {
+    transition: none;
+    transform: none;
+  }
+}
+
+.aichad-panel__line {
+  margin: 0 0 0.15rem;
+  color: #334155;
+}
+
+.aichad-panel__line--emphasis {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.aichad-panel__line--error { color: #b91c1c; }
+.aichad-panel__line--ok { color: #15803d; }
+
+.aichad-panel__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.aichad-panel__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.aichad-panel__action {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.aichad-panel__action:hover:not(:disabled) {
+  color: #0f172a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.aichad-panel__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/*
+ * Approval gets its own full-width row in red — it is the destructive path, and
+ * sharing a line with the plain links made all three wrap.
+ */
+.aichad-panel__action--danger {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.5rem;
+  background: #b91c1c;
+  color: #fff;
+  text-align: center;
+}
+
+.aichad-panel__action--danger:hover:not(:disabled) {
+  background: #991b1b;
+  color: #fff;
+  text-decoration: none;
+}
+
+.aichad-panel__action--muted {
+  margin-left: auto;
+  font-weight: 400;
+  color: #64748b;
+}
+
+#aichad-badge-panel.aichad-dark {
+  background: #1c1917;
+  border-color: #3f3f46;
+  color: #e7e5e4;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.aichad-dark .aichad-panel__line { color: #d6d3d1; }
+.aichad-dark .aichad-panel__line--emphasis { color: #fafaf9; }
+.aichad-dark .aichad-panel__line--error { color: #fca5a5; }
+.aichad-dark .aichad-panel__line--ok { color: #86efac; }
+.aichad-dark .aichad-panel__footer { border-top-color: #3f3f46; }
+.aichad-dark .aichad-panel__action { color: #e7e5e4; }
+.aichad-dark .aichad-panel__action:hover:not(:disabled) { color: #fafaf9; }
+.aichad-dark .aichad-panel__action--muted { color: #a8a29e; }
+
+.aichad-dark .aichad-panel__action--danger {
+  background: #b91c1c;
+  color: #fff;
+}
+
+.aichad-dark .aichad-panel__action--danger:hover:not(:disabled) {
+  background: #dc2626;
+  color: #fff;
+}

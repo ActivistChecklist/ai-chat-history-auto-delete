@@ -12,6 +12,7 @@
     "test:integration": "node scripts/integration-test.js dryrun",
     "test:integration:delete": "node scripts/integration-test.js delete",
     "lint": "eslint .",
+    "publish": "yarn release",
     "release": "node scripts/publish.mjs",
     "lint:fix": "eslint . --fix",
     "prepare": "husky"

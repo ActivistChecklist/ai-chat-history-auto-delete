@@ -72,7 +72,31 @@ export async function getLastRun() {
 }
 
 export async function setLastRun(result) {
-  await chrome.storage.local.set({ [STORAGE_KEYS.LAST_RUN]: result });
+  const updates = { [STORAGE_KEYS.LAST_RUN]: result };
+  // LAST_RUN is overwritten by no-op runs too, so a run that actually deleted something
+  // gets its own record — that is what the sidebar badge reports.
+  if (result?.deleted > 0 && result?.timestamp) {
+    updates[STORAGE_KEYS.LAST_DELETION] = {
+      deleted: result.deleted,
+      timestamp: result.timestamp
+    };
+  }
+  await chrome.storage.local.set(updates);
+}
+
+/**
+ * Most recent run that removed at least one chat, or null.
+ * Falls back to activity history for installs predating LAST_DELETION.
+ */
+export async function getLastDeletion() {
+  const result = await chrome.storage.local.get(STORAGE_KEYS.LAST_DELETION);
+  const stored = result[STORAGE_KEYS.LAST_DELETION];
+  if (stored?.timestamp) return stored;
+
+  const history = await getActivityHistory();
+  const entry = history.find((h) => (h.deletedCount ?? 0) > 0);
+  if (!entry) return null;
+  return { deleted: entry.deletedCount, timestamp: entry.timestamp };
 }
 
 export async function getPendingConfirm() {
