@@ -41,15 +41,17 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { assertChromeVersion } from './lib/chrome-version.mjs';
 import { diagnoseSigning, makeOpRunners, formatSigningFailure } from './lib/signing.mjs';
+import { loadEnvFileWithReport, formatEnvConflict } from './lib/env-file.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const PKG_NAME = 'ai-chat-history-auto-delete';
 
 // Pick up OP_SIGNING_KEY_REF (and anything else) from .env so it does not have to live
-// in a shell profile. Real environment variables still win.
+// in a shell profile. Real environment variables still win — and when they disagree with
+// .env we say so, because that precedence is otherwise invisible.
 const ENV_FILE = path.join(ROOT, '.env');
-if (fs.existsSync(ENV_FILE)) process.loadEnvFile(ENV_FILE);
+const { conflicts: ENV_CONFLICTS } = loadEnvFileWithReport(ENV_FILE);
 
 // ─── Args ────────────────────────────────────────────────────────────────────
 
@@ -116,6 +118,10 @@ async function confirm(question) {
 step('Preflight');
 
 // Releasing from main is allowed in this project (see AGENTS.md).
+for (const conflict of ENV_CONFLICTS) {
+  console.log(`  ⚠ ${formatEnvConflict(conflict).split('\n').join('\n  ')}`);
+}
+
 const branch = capture('git', ['rev-parse', '--abbrev-ref', 'HEAD']).out;
 console.log(`  branch: ${branch}`);
 
@@ -158,8 +164,9 @@ if (!willSign) {
   }
   console.log(
     `  signing: key resolves (${diag.ref.replace(/[^/]+$/, '…')}` +
-    `${opAccount ? `, account ${opAccount}` : ''})`
+    `${diag.account ? `, account ${diag.account}` : ''})`
   );
+  if (diag.note) console.log(`  ⚠ ${diag.note}`);
 }
 
 if (SKIP_CHECKS) {

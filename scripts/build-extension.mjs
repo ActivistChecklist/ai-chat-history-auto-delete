@@ -21,14 +21,18 @@ import { spawnSync } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import archiver from 'archiver';
 import { assertChromeVersion } from './lib/chrome-version.mjs';
+import { loadEnvFileWithReport } from './lib/env-file.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
 // Load .env so OP_SIGNING_KEY_REF works for `yarn build --sign` without shell setup.
-// Real environment variables take precedence.
+// Real environment variables take precedence; release.mjs reports any disagreement.
 const ENV_FILE = path.join(ROOT, '.env');
-if (fs.existsSync(ENV_FILE)) process.loadEnvFile(ENV_FILE);
+const { conflicts: ENV_CONFLICTS } = loadEnvFileWithReport(ENV_FILE);
+for (const c of ENV_CONFLICTS) {
+  console.warn(`Warning: ${c.key} differs between your shell and .env; shell value wins.`);
+}
 const DIST = path.join(ROOT, 'dist');
 const RELEASE = path.join(ROOT, 'release');
 
@@ -105,9 +109,18 @@ function readKeyFrom1Password() {
       '  e.g. OP_SIGNING_KEY_REF="op://<vault>/<item>/private key"'
     );
   }
-  // Scope to OP_ACCOUNT when set; required when several 1Password accounts are connected.
-  const scope = process.env.OP_ACCOUNT ? ['--account', process.env.OP_ACCOUNT] : [];
-  const r = spawnSync('op', ['read', ref, ...scope], { encoding: 'utf8' });
+  // Try OP_ACCOUNT-scoped first when set, then unscoped. Passing --account makes op
+  // resolve the account from its own config file, which is empty when the 1Password
+  // desktop-app integration is providing accounts — so the unscoped form is the one
+  // that works there.
+  const attempts = process.env.OP_ACCOUNT
+    ? [['read', ref, '--account', process.env.OP_ACCOUNT], ['read', ref]]
+    : [['read', ref]];
+  let r;
+  for (const args of attempts) {
+    r = spawnSync('op', args, { encoding: 'utf8' });
+    if (!r.error && r.status === 0) break;
+  }
   if (r.error) {
     throw new Error(`1Password CLI (op) not found: ${r.error.message}`);
   }

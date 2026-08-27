@@ -11,6 +11,7 @@ function runners(over = {}) {
     accountList: () => ok('[{"url":"my.1password.com"}]'),
     whoami: () => ok('user'),
     read: () => ok('-----BEGIN PRIVATE KEY-----'),
+    readUnscoped: () => ok('-----BEGIN PRIVATE KEY-----'),
     ...over
   };
 }
@@ -19,7 +20,7 @@ const REF = 'op://Vault/Item/private key';
 
 describe('diagnoseSigning', () => {
   it('passes when every check succeeds', () => {
-    expect(diagnoseSigning(REF, runners())).toEqual({ ok: true, ref: REF });
+    expect(diagnoseSigning(REF, runners())).toEqual({ ok: true, ref: REF, account: null });
   });
 
   it('flags a missing reference and points at .env.example', () => {
@@ -56,7 +57,7 @@ describe('diagnoseSigning', () => {
     const d = diagnoseSigning(REF, runners({
       whoami: () => fail('account is not signed in')
     }));
-    expect(d).toEqual({ ok: true, ref: REF });
+    expect(d).toEqual({ ok: true, ref: REF, account: null });
   });
 
   it.each([ok(''), ok('[]'), fail()])(
@@ -71,6 +72,7 @@ describe('diagnoseSigning', () => {
     (accountList) => {
       const d = diagnoseSigning(REF, runners({
         read: () => fail('account is not signed in'),
+      readUnscoped: () => fail('account is not signed in'),
         whoami: () => fail('account is not signed in'),
         accountList: () => accountList
       }));
@@ -83,6 +85,7 @@ describe('diagnoseSigning', () => {
   it('surfaces op read stderr in every failure mode', () => {
     const d = diagnoseSigning(REF, runners({
       read: () => fail('vault "Activist" not found'),
+      readUnscoped: () => fail('vault "Activist" not found'),
       whoami: () => fail(),
       accountList: () => ok('[]')
     }));
@@ -92,6 +95,7 @@ describe('diagnoseSigning', () => {
   it('recommends the desktop integration only when the app is present on mac', () => {
     const notConnected = {
       read: () => fail(),
+      readUnscoped: () => fail(),
       whoami: () => fail(),
       accountList: () => ok('[]')
     };
@@ -111,6 +115,7 @@ describe('diagnoseSigning', () => {
   it('distinguishes a locked account from an absent one', () => {
     const d = diagnoseSigning(REF, runners({
       read: () => fail('not signed in'),
+      readUnscoped: () => fail('not signed in'),
       whoami: () => fail('not signed in'),
       accountList: () => ok('[{"url":"my.1password.com"}]')
     }), {
@@ -124,6 +129,7 @@ describe('diagnoseSigning', () => {
   it('falls back to op signin when there is no desktop app', () => {
     const d = diagnoseSigning(REF, runners({
       read: () => fail('not signed in'),
+      readUnscoped: () => fail('not signed in'),
       whoami: () => fail(),
       accountList: () => ok('[{"url":"my.1password.com"}]')
     }), { hasDesktopApp: false });
@@ -131,7 +137,10 @@ describe('diagnoseSigning', () => {
   });
 
   it('flags an unresolvable reference and surfaces op stderr', () => {
-    const d = diagnoseSigning(REF, runners({ read: () => fail('item "Item" not found') }), {
+    const d = diagnoseSigning(REF, runners({
+      read: () => fail('item "Item" not found'),
+      readUnscoped: () => fail('item "Item" not found')
+    }), {
       account: 'my.1password.com'
     });
     expect(d.title).toMatch(/could not be read/);
@@ -144,6 +153,36 @@ describe('diagnoseSigning', () => {
     const secret = '-----BEGIN PRIVATE KEY-----MIIEvQ';
     const d = diagnoseSigning(REF, runners({ read: () => ok(secret) }));
     expect(JSON.stringify(d)).not.toContain('BEGIN PRIVATE KEY');
+  });
+});
+
+describe('diagnoseSigning account scoping', () => {
+  // The bug: passing --account makes op resolve the account from its own config file,
+  // which is empty under the desktop-app integration. A scoped read fails there while
+  // the identical unscoped read succeeds, so a scoped failure must not end the check.
+  it('falls back to an unscoped read and says OP_ACCOUNT can be removed', () => {
+    const d = diagnoseSigning(REF, runners({
+      read: () => fail('No accounts configured for use with 1Password CLI.'),
+      readUnscoped: () => ok('-----BEGIN PRIVATE KEY-----')
+    }), { account: 'my.1password.com' });
+
+    expect(d.ok).toBe(true);
+    expect(d.account).toBeNull();
+    expect(d.note).toMatch(/OP_ACCOUNT="my\.1password\.com" was ignored/);
+    expect(d.note).toMatch(/can remove OP_ACCOUNT/);
+  });
+
+  it('keeps the scoped account when the scoped read works', () => {
+    const d = diagnoseSigning(REF, runners({
+      readUnscoped: () => fail('should not be reached')
+    }), { account: 'team.1password.com' });
+
+    expect(d).toEqual({ ok: true, ref: REF, account: 'team.1password.com' });
+  });
+
+  it('does not pass an account when none is configured', () => {
+    const d = diagnoseSigning(REF, runners({ read: () => fail('should not be used') }));
+    expect(d).toEqual({ ok: true, ref: REF, account: null });
   });
 });
 
@@ -193,6 +232,7 @@ describe('diagnoseSigning with several accounts', () => {
   it('asks for OP_ACCOUNT rather than a plain unlock', () => {
     const d = diagnoseSigning(REF, runners({
       read: () => fail('multiple accounts'),
+      readUnscoped: () => fail('multiple accounts'),
       whoami: () => fail('account is not signed in'),
       accountList: () => ok(TWO)
     }), { platform: 'darwin', hasDesktopApp: true });
@@ -208,6 +248,7 @@ describe('diagnoseSigning with several accounts', () => {
   it('treats a chosen account as the locked case instead', () => {
     const d = diagnoseSigning(REF, runners({
       read: () => fail('not signed in'),
+      readUnscoped: () => fail('not signed in'),
       whoami: () => fail('locked'),
       accountList: () => ok(TWO)
     }), { account: 'team.1password.com', hasDesktopApp: false });

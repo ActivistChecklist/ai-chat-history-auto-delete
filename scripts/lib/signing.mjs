@@ -88,8 +88,28 @@ export function diagnoseSigning(ref, runners, opts = {}) {
   // With the 1Password desktop-app integration, `whoami` reports "account is not signed
   // in" (there is no CLI session) while `op read` still succeeds by prompting for
   // biometric authorization. Gating on whoami would block a working setup.
-  const read = runners.read(ref);
-  if (read.status === 0) return { ok: true, ref };
+  //
+  // Try the scoped form first when OP_ACCOUNT is set, then fall back to unscoped: the two
+  // resolve accounts by different mechanisms and only one may work on a given machine.
+  let read;
+  if (account) {
+    read = runners.read(ref);
+    if (read.status === 0) return { ok: true, ref, account };
+
+    const unscoped = runners.readUnscoped(ref);
+    if (unscoped.status === 0) {
+      return {
+        ok: true,
+        ref,
+        account: null,
+        note: `OP_ACCOUNT="${account}" was ignored — it made op read fail, but the ` +
+          'unscoped read works. You can remove OP_ACCOUNT from .env.'
+      };
+    }
+  } else {
+    read = runners.readUnscoped(ref);
+    if (read.status === 0) return { ok: true, ref, account: null };
+  }
 
   // From here the read failed, so whoami and the account list are used only to explain
   // WHY, because each cause needs a different fix.
@@ -169,7 +189,11 @@ export function makeOpRunners(spawnSync, cwd, account = process.env.OP_ACCOUNT) 
     // Listing accounts must NOT be scoped — that is how we discover them.
     accountList: () => call(['account', 'list', '--format=json'], false),
     whoami: () => call(['whoami']),
-    read: (ref) => call(['read', ref])
+    read: (ref) => call(['read', ref]),
+    // Passing --account makes op resolve the account from its own config file. With the
+    // desktop-app integration that file is empty ("accounts": null), so a scoped read
+    // fails with "No accounts configured" while an unscoped one succeeds via the app.
+    readUnscoped: (ref) => call(['read', ref], false)
   };
 }
 
