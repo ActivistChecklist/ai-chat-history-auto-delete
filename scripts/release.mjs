@@ -40,6 +40,7 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { assertChromeVersion } from './lib/chrome-version.mjs';
+import { diagnoseSigning, makeOpRunners, formatSigningFailure } from './lib/signing.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -144,39 +145,15 @@ const willSign = !NO_SIGN;
 if (!willSign) {
   console.log('  ⚠ signing disabled via --no-sign (zip only, no CRX)');
 } else {
-  const ref = process.env.OP_SIGNING_KEY_REF;
-  if (!ref) {
-    die(
-      'OP_SIGNING_KEY_REF is not set, so the CRX cannot be signed.\n' +
-      '  Set it in .env (see .env.example):\n' +
-      '    cp .env.example .env   # then paste your 1Password secret reference\n' +
-      '  Or pass --no-sign to release without a CRX.'
-    );
+  // Everything here runs BEFORE the version bump so a misconfigured key never leaves a
+  // dangling bump commit behind.
+  const diag = diagnoseSigning(process.env.OP_SIGNING_KEY_REF, makeOpRunners(spawnSync, ROOT), {
+    hasDesktopApp: fs.existsSync('/Applications/1Password.app')
+  });
+  if (!diag.ok) {
+    die(formatSigningFailure(diag));
   }
-  if (!ref.startsWith('op://')) {
-    die(`OP_SIGNING_KEY_REF must be a 1Password secret reference starting with "op://" (got "${ref}").`);
-  }
-
-  const opWhoami = capture('op', ['whoami']);
-  if (opWhoami.status !== 0) {
-    die(
-      '1Password CLI is not signed in, so the signing key cannot be read.\n' +
-      '  Run:  op signin\n' +
-      `  (${(opWhoami.err || 'op whoami failed').split('\n')[0]})`
-    );
-  }
-
-  // Resolve the reference now, discarding the value, so a typo fails here rather than
-  // after the version has already been bumped and tagged.
-  const probe = spawnSync('op', ['read', ref], { cwd: ROOT, encoding: 'utf8' });
-  if (probe.status !== 0) {
-    die(
-      `OP_SIGNING_KEY_REF does not resolve: ${ref}\n` +
-      `  ${(probe.stderr || '').trim().split('\n')[0]}\n` +
-      '  Check the reference in 1Password (right-click the field -> Copy Secret Reference).'
-    );
-  }
-  console.log(`  signing: enabled (${ref.replace(/[^/]+$/, '…')})`);
+  console.log(`  signing: key resolves (${diag.ref.replace(/[^/]+$/, '…')})`);
 }
 
 if (SKIP_CHECKS) {
