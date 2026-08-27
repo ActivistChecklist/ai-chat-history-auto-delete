@@ -147,13 +147,19 @@ if (!willSign) {
 } else {
   // Everything here runs BEFORE the version bump so a misconfigured key never leaves a
   // dangling bump commit behind.
-  const diag = diagnoseSigning(process.env.OP_SIGNING_KEY_REF, makeOpRunners(spawnSync, ROOT), {
-    hasDesktopApp: fs.existsSync('/Applications/1Password.app')
-  });
+  const opAccount = process.env.OP_ACCOUNT || null;
+  const diag = diagnoseSigning(
+    process.env.OP_SIGNING_KEY_REF,
+    makeOpRunners(spawnSync, ROOT, opAccount),
+    { hasDesktopApp: fs.existsSync('/Applications/1Password.app'), account: opAccount }
+  );
   if (!diag.ok) {
     die(formatSigningFailure(diag));
   }
-  console.log(`  signing: key resolves (${diag.ref.replace(/[^/]+$/, '…')})`);
+  console.log(
+    `  signing: key resolves (${diag.ref.replace(/[^/]+$/, '…')}` +
+    `${opAccount ? `, account ${opAccount}` : ''})`
+  );
 }
 
 if (SKIP_CHECKS) {

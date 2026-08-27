@@ -101,11 +101,13 @@ function readKeyFrom1Password() {
   const ref = process.env.OP_SIGNING_KEY_REF;
   if (!ref) {
     throw new Error(
-      'Set OP_SIGNING_KEY_REF to your 1Password item reference.\n' +
-      '  e.g. export OP_SIGNING_KEY_REF="op://Personal/Chrome Extension Signing Key/private key"'
+      'Set OP_SIGNING_KEY_REF in .env to your 1Password secret reference.\n' +
+      '  e.g. OP_SIGNING_KEY_REF="op://<vault>/<item>/private key"'
     );
   }
-  const r = spawnSync('op', ['read', ref], { encoding: 'utf8' });
+  // Scope to OP_ACCOUNT when set; required when several 1Password accounts are connected.
+  const scope = process.env.OP_ACCOUNT ? ['--account', process.env.OP_ACCOUNT] : [];
+  const r = spawnSync('op', ['read', ref, ...scope], { encoding: 'utf8' });
   if (r.error) {
     throw new Error(`1Password CLI (op) not found: ${r.error.message}`);
   }

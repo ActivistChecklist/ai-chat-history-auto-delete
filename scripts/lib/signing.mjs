@@ -18,9 +18,33 @@
  * }} Runners
  */
 
+/**
+ * Turns `op account list --format=json` into {account, email, url}.
+ *
+ * `account` is the full sign-in address (e.g. `my.1password.com`) because that form is
+ * always accepted by `op --account`. The bare first URL label is a shorthand that does
+ * not reliably resolve, so it is deliberately not suggested.
+ */
+export function parseAccounts(json) {
+  let rows;
+  try {
+    rows = JSON.parse(json);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((r) => ({
+      url: r.url || '',
+      email: r.email || '',
+      account: r.url || r.email || ''
+    }))
+    .filter((r) => r.account);
+}
+
 /** @returns {{ok: true, ref: string} | {ok: false, title: string, steps: string[]}} */
 export function diagnoseSigning(ref, runners, opts = {}) {
-  const { platform = process.platform, hasDesktopApp = false } = opts;
+  const { platform = process.platform, hasDesktopApp = false, account = null } = opts;
   const isMac = platform === 'darwin';
 
   if (!ref) {
@@ -60,79 +84,90 @@ export function diagnoseSigning(ref, runners, opts = {}) {
     };
   }
 
-  // `whoami` is the authority on "can op be used right now" — with the desktop app
-  // integration the CLI may be perfectly usable even if `account list` looks unhelpful.
-  // The account list is consulted only to explain WHY whoami failed, because "never
-  // connected" and "locked" need different fixes.
-  const whoami = runners.whoami();
-  if (whoami.status !== 0) {
-    const accounts = runners.accountList();
-    const neverConnected = accounts.status !== 0
-      || accounts.out.trim() === ''
-      || accounts.out.trim() === '[]';
-
-    if (neverConnected) {
-      const steps = [];
-      if (isMac && hasDesktopApp) {
-        steps.push(
-          'Enable the desktop integration (recommended — unlocks with Touch ID, no session to expire):',
-          '  1Password app -> Settings -> Developer -> "Integrate with 1Password CLI"',
-          '  Then open a new terminal tab and re-run.'
-        );
-      }
-      steps.push(
-        'Or connect the CLI manually:',
-        '  op account add --address my.1password.com --email <your-email>',
-        '  eval $(op signin)',
-        'Verify with: op whoami'
-      );
-      return {
-        ok: false,
-        title: 'No 1Password account is connected to the CLI.',
-        steps
-      };
-    }
-
-    return {
-      ok: false,
-      title: 'The 1Password CLI has an account but is locked or signed out.',
-      steps: [
-        isMac && hasDesktopApp
-          ? 'Unlock the 1Password desktop app, then re-run (biometric unlock covers the CLI)'
-          : 'eval $(op signin)',
-        'Verify with: op whoami',
-        `(${(whoami.err || 'op whoami failed').split('\n')[0]})`
-      ]
-    };
-  }
-
-  // Resolve now, discarding the value, so a typo fails before anything is bumped.
+  // Gate on the operation we actually need — resolving the key — not on `op whoami`.
+  // With the 1Password desktop-app integration, `whoami` reports "account is not signed
+  // in" (there is no CLI session) while `op read` still succeeds by prompting for
+  // biometric authorization. Gating on whoami would block a working setup.
   const read = runners.read(ref);
-  if (read.status !== 0) {
+  if (read.status === 0) return { ok: true, ref };
+
+  // From here the read failed, so whoami and the account list are used only to explain
+  // WHY, because each cause needs a different fix.
+  const readErr = (read.err || '').trim().split('\n')[0] || 'op read failed';
+  const whoami = runners.whoami();
+  const accounts = runners.accountList();
+  const listed = parseAccounts(accounts.out);
+  const noAccounts = accounts.status !== 0
+    || accounts.out.trim() === ''
+    || accounts.out.trim() === '[]';
+
+  if (noAccounts && whoami.status !== 0) {
+    const steps = [];
+    if (isMac && hasDesktopApp) {
+      steps.push(
+        'Enable the desktop integration (recommended — unlocks with Touch ID, no session to expire):',
+        '  1Password app -> Settings -> Developer -> "Integrate with 1Password CLI"',
+        '  Then open a new terminal tab and re-run.'
+      );
+    }
+    steps.push(
+      'Or connect the CLI manually:',
+      '  op account add --address my.1password.com --email <your-email>',
+      '  eval $(op signin)'
+    );
+    steps.push(`(op read said: ${readErr})`);
+    return { ok: false, title: 'No 1Password account is connected to the CLI.', steps };
+  }
+
+  // Several accounts and none chosen: the read may have hit the wrong one.
+  if (listed.length > 1 && !account) {
+    const steps = ['Add OP_ACCOUNT to .env to choose the account that owns the signing vault:'];
+    for (const a of listed) {
+      steps.push(`  OP_ACCOUNT="${a.account}"    # ${a.email || a.url}`);
+    }
+    steps.push(`(op read said: ${readErr})`);
     return {
       ok: false,
-      title: `OP_SIGNING_KEY_REF does not resolve: ${ref}`,
-      steps: [
-        (read.err || '').trim().split('\n')[0] || 'op read failed',
-        'Check the vault and item names, or re-copy the secret reference from 1Password',
-        'List candidates with: op item list --format=table'
-      ]
+      title: `${listed.length} 1Password accounts are connected but the key could not be read.`,
+      steps
     };
   }
 
-  return { ok: true, ref };
+  // An account is selected and connected, so this is a locked vault or a wrong reference.
+  const steps = [readErr];
+  if (/not signed in|session|unauthor|locked/i.test(readErr) || whoami.status !== 0) {
+    steps.push(
+      isMac && hasDesktopApp
+        ? 'Unlock the 1Password desktop app (biometric unlock covers the CLI), then re-run'
+        : `eval $(op signin${account ? ` --account ${account}` : ''})`
+    );
+  }
+  steps.push(
+    'If it is unlocked, check the vault and item names in the reference:',
+    `  ${ref}`,
+    `  op item list --vault "<vault>"${account ? ` --account ${account}` : ''}`
+  );
+  return { ok: false, title: 'The signing key could not be read from 1Password.', steps };
 }
 
-/** Builds real runners around a spawn function (kept injectable for tests). */
-export function makeOpRunners(spawnSync, cwd) {
-  const call = (args) => {
-    const r = spawnSync('op', args, { cwd, encoding: 'utf8' });
+/**
+ * Builds real runners around a spawn function (kept injectable for tests).
+ *
+ * `account` scopes every call with `--account`. With more than one 1Password account
+ * connected, an unscoped `op read` cannot tell which account owns the vault, so
+ * OP_ACCOUNT must select one.
+ */
+export function makeOpRunners(spawnSync, cwd, account = process.env.OP_ACCOUNT) {
+  const scope = account ? ['--account', account] : [];
+  const call = (args, scoped = true) => {
+    const r = spawnSync('op', scoped ? [...args, ...scope] : args, { cwd, encoding: 'utf8' });
     if (r.error) return { status: 127, out: '', err: r.error.message };
     return { status: r.status ?? 1, out: r.stdout || '', err: r.stderr || '' };
   };
   return {
-    version: () => call(['--version']),
-    accountList: () => call(['account', 'list', '--format=json']),
+    version: () => call(['--version'], false),
+    // Listing accounts must NOT be scoped — that is how we discover them.
+    accountList: () => call(['account', 'list', '--format=json'], false),
     whoami: () => call(['whoami']),
     read: (ref) => call(['read', ref])
   };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { diagnoseSigning, formatSigningFailure } from '../../scripts/lib/signing.mjs';
+import { diagnoseSigning, formatSigningFailure, parseAccounts } from '../../scripts/lib/signing.mjs';
 
 const ok = (out = '') => ({ status: 0, out, err: '' });
 const fail = (err = 'boom') => ({ status: 1, out: '', err });
@@ -49,21 +49,28 @@ describe('diagnoseSigning', () => {
     expect(d.steps.join('\n')).toMatch(/developer\.1password\.com/);
   });
 
-  // whoami is authoritative: with desktop-app integration the CLI can be perfectly
-  // usable even when `account list` is unhelpful, so an empty list must not fail on its own.
+  // The bug this replaced: gating on `op whoami` blocked a perfectly working setup.
+  // With the desktop-app integration there is no CLI session, so whoami reports
+  // "account is not signed in" while `op read` succeeds via biometric prompt.
+  it('passes when read works even though whoami fails', () => {
+    const d = diagnoseSigning(REF, runners({
+      whoami: () => fail('account is not signed in')
+    }));
+    expect(d).toEqual({ ok: true, ref: REF });
+  });
+
   it.each([ok(''), ok('[]'), fail()])(
-    'passes on an unhelpful account list when whoami succeeds',
+    'passes on an unhelpful account list when read works',
     (accountList) => {
       expect(diagnoseSigning(REF, runners({ accountList: () => accountList })).ok).toBe(true);
     }
   );
 
-  // The case that actually bit: telling someone to run `op signin` when the CLI was
-  // never connected sends them down the wrong path.
   it.each([ok(''), ok('[]'), fail()])(
-    'reports "not connected" when whoami fails and no account is listed',
+    'reports "not connected" when read fails, whoami fails and no account is listed',
     (accountList) => {
       const d = diagnoseSigning(REF, runners({
+        read: () => fail('account is not signed in'),
         whoami: () => fail('account is not signed in'),
         accountList: () => accountList
       }));
@@ -73,8 +80,21 @@ describe('diagnoseSigning', () => {
     }
   );
 
+  it('surfaces op read stderr in every failure mode', () => {
+    const d = diagnoseSigning(REF, runners({
+      read: () => fail('vault "Activist" not found'),
+      whoami: () => fail(),
+      accountList: () => ok('[]')
+    }));
+    expect(d.steps.join('\n')).toMatch(/vault "Activist" not found/);
+  });
+
   it('recommends the desktop integration only when the app is present on mac', () => {
-    const notConnected = { whoami: () => fail(), accountList: () => ok('[]') };
+    const notConnected = {
+      read: () => fail(),
+      whoami: () => fail(),
+      accountList: () => ok('[]')
+    };
     const withApp = diagnoseSigning(REF, runners(notConnected), {
       platform: 'darwin',
       hasDesktopApp: true
@@ -90,18 +110,20 @@ describe('diagnoseSigning', () => {
 
   it('distinguishes a locked account from an absent one', () => {
     const d = diagnoseSigning(REF, runners({
+      read: () => fail('not signed in'),
       whoami: () => fail('not signed in'),
       accountList: () => ok('[{"url":"my.1password.com"}]')
     }), {
       platform: 'darwin',
       hasDesktopApp: true
     });
-    expect(d.title).toMatch(/locked or signed out/);
+    expect(d.title).toMatch(/could not be read/);
     expect(d.steps.join('\n')).toMatch(/Unlock the 1Password desktop app/);
   });
 
   it('falls back to op signin when there is no desktop app', () => {
     const d = diagnoseSigning(REF, runners({
+      read: () => fail('not signed in'),
       whoami: () => fail(),
       accountList: () => ok('[{"url":"my.1password.com"}]')
     }), { hasDesktopApp: false });
@@ -109,9 +131,13 @@ describe('diagnoseSigning', () => {
   });
 
   it('flags an unresolvable reference and surfaces op stderr', () => {
-    const d = diagnoseSigning(REF, runners({ read: () => fail('item "Item" not found') }));
-    expect(d.title).toMatch(/does not resolve/);
-    expect(d.steps.join('\n')).toMatch(/item "Item" not found/);
+    const d = diagnoseSigning(REF, runners({ read: () => fail('item "Item" not found') }), {
+      account: 'my.1password.com'
+    });
+    expect(d.title).toMatch(/could not be read/);
+    const steps = d.steps.join('\n');
+    expect(steps).toMatch(/item "Item" not found/);
+    expect(steps).toMatch(/op item list/);
   });
 
   it('never includes the resolved key material in its result', () => {
@@ -134,5 +160,66 @@ describe('formatSigningFailure', () => {
     expect(lines[2]).toBe('  Do this:');
     expect(lines[3]).toBe('    sub-step');
     expect(lines[4]).toBe('  Then this');
+  });
+});
+
+describe('parseAccounts', () => {
+  it('uses the full sign-in address, not the bare first label', () => {
+    const rows = parseAccounts(JSON.stringify([
+      { url: 'team.1password.com', email: 'user@example.org' },
+      { url: 'my.1password.com', email: 'personal@example.com' }
+    ]));
+    // "my" alone is an unreliable shorthand; op --account always takes the address.
+    expect(rows.map((r) => r.account)).toEqual(['team.1password.com', 'my.1password.com']);
+  });
+
+  it('falls back to the email when a url is absent', () => {
+    expect(parseAccounts(JSON.stringify([{ email: 'a@b.com' }]))[0].account).toBe('a@b.com');
+  });
+
+  it('survives malformed or empty input', () => {
+    expect(parseAccounts('not json')).toEqual([]);
+    expect(parseAccounts('[]')).toEqual([]);
+    expect(parseAccounts('{}')).toEqual([]);
+  });
+});
+
+describe('diagnoseSigning with several accounts', () => {
+  const TWO = JSON.stringify([
+    { url: 'team.1password.com', email: 'user@example.org' },
+    { url: 'my.1password.com', email: 'personal@example.com' }
+  ]);
+
+  it('asks for OP_ACCOUNT rather than a plain unlock', () => {
+    const d = diagnoseSigning(REF, runners({
+      read: () => fail('multiple accounts'),
+      whoami: () => fail('account is not signed in'),
+      accountList: () => ok(TWO)
+    }), { platform: 'darwin', hasDesktopApp: true });
+
+    expect(d.ok).toBe(false);
+    expect(d.title).toMatch(/2 1Password accounts are connected/);
+    const steps = d.steps.join('\n');
+    expect(steps).toMatch(/OP_ACCOUNT="team\.1password\.com"/);
+    expect(steps).toMatch(/OP_ACCOUNT="my\.1password\.com"/);
+    expect(steps).toMatch(/user@example\.org/);
+  });
+
+  it('treats a chosen account as the locked case instead', () => {
+    const d = diagnoseSigning(REF, runners({
+      read: () => fail('not signed in'),
+      whoami: () => fail('locked'),
+      accountList: () => ok(TWO)
+    }), { account: 'team.1password.com', hasDesktopApp: false });
+
+    expect(d.title).toMatch(/could not be read/);
+    expect(d.steps.join('\n')).toMatch(/op signin --account team\.1password\.com/);
+  });
+
+  it('passes once the chosen account works', () => {
+    const d = diagnoseSigning(REF, runners({ accountList: () => ok(TWO) }), {
+      account: 'team.1password.com'
+    });
+    expect(d.ok).toBe(true);
   });
 });
